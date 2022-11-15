@@ -52,8 +52,11 @@ func handler_proxy(domain string, proxy string) string {
 		return "error"
 	}
 	defer resp.Body.Close()
-	//fmt.Print(resp.Status)
-	return resp.Status
+	if resp.StatusCode == 200 {
+		return resp.Status
+	} else {
+		return "error"
+	}
 }
 
 func handler_proxy_thread(domain string, proxy []string) string {
@@ -102,17 +105,20 @@ func main() {
 	//create a channel to store the result
 	var result_channel = make(chan string)
 	//create a thread for each chunk
-	for i := 0; i < thread; i++ {
-		go func(i int) {
-			result_channel <- handler_proxy_thread(domain, chunk_list[i])
-		}(i)
-	}
-	//get the result from the channel
-	for i := 0; i < thread; i++ {
-		var result = <-result_channel
-		if result != "error" {
-			fmt.Println(result)
-			break
+	for true {
+		for i := 0; i < thread; i++ {
+			//fmt.Print("Thread ", i, " is running")
+			go func(i int) {
+				result_channel <- handler_proxy_thread(domain, chunk_list[i])
+			}(i)
+		}
+		//get the result from the channel
+		for i := 0; i < thread; i++ {
+			var result = <-result_channel
+			if result != "error" {
+				//fmt.Println(result)
+				break
+			}
 		}
 	}
 
