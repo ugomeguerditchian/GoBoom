@@ -28,36 +28,7 @@ func proxy_getter() []string {
 	//split the string by new line
 	proxy_list = strings.Replace(proxy_list, "\r", "", -1)
 	var proxy_list_final []string = strings.Split(proxy_list, "\n")
-	var real_proxy_list []string
-	//test each proxy in the list
-	for i := 0; i < len(proxy_list_final); i++ {
-		//create a proxy url
-		proxy_url, err := url.Parse("http://" + proxy_list_final[i])
-		if err != nil {
-			log.Fatal(err)
-		}
-		//create a transport
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxy_url),
-		}
-		//create a client
-		client := &http.Client{
-			Transport: transport,
-		}
-		//create a request
-		req, err := http.NewRequest("GET", "https://www.google.com", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		//send the request
-		resp, err := client.Do(req)
-		//if the status code is 200, add the proxy to the list
-		if resp.StatusCode == 200 {
-			real_proxy_list = append(real_proxy_list, proxy_list_final[i])
-		}
-	}
-
-	return real_proxy_list
+	return proxy_list_final
 
 }
 
@@ -85,6 +56,36 @@ func handler_proxy(domain string, proxy string) string {
 	return resp.Status
 }
 
+func handler_proxy_thread(domain string, proxy []string) string {
+	//just connect to the website and check the status code
+	//if handler_proxy return error check the next proxy
+	for true {
+		for i := 0; i < len(proxy); i++ {
+			var result = handler_proxy(domain, proxy[i])
+			if result != "error" {
+				return result
+			}
+		}
+	}
+	return "error"
+}
+
+// create a chunk function to split the proxy list and return a list of list string with a len of total_to_divided
+func chunkSlice(s []string, total_to_divided int) [][]string {
+	var divided [][]string
+	var chunk float32 = float32(len(s) / total_to_divided)
+	var start int = 0
+	var end int = 0
+	for i := 0; i < total_to_divided; i++ {
+		end = start + int(chunk)
+		if end > len(s) {
+			end = len(s)
+		}
+		divided = append(divided, s[start:end])
+		start = end
+	}
+	return divided
+}
 func main() {
 	//ask for a domain name
 	fmt.Println("Enter a domain name: ")
@@ -94,27 +95,25 @@ func main() {
 	fmt.Println("Enter the number of thread: ")
 	var thread int
 	fmt.Scanln(&thread)
-	//call the handler function
-	//handler(domain)
 	//call the proxy_getter function
 	proxy_list := proxy_getter()
 	//create chunk of proxy list for each thread
-	var chunk int = len(proxy_list) / thread
-	var proxy_list_chunk [][]string
+	var chunk_list [][]string = chunkSlice(proxy_list, thread)
+	//create a channel to store the result
+	var result_channel = make(chan string)
+	//create a thread for each chunk
 	for i := 0; i < thread; i++ {
-		proxy_list_chunk = append(proxy_list_chunk, proxy_list[i*chunk:(i+1)*chunk])
+		go func(i int) {
+			result_channel <- handler_proxy_thread(domain, chunk_list[i])
+		}(i)
 	}
-	//create a channel
-	c := make(chan string)
+	//get the result from the channel
 	for i := 0; i < thread; i++ {
-		go func() {
-			for _, proxy := range proxy_list_chunk[i] {
-				c <- handler_proxy(domain, proxy)
-			}
-		}()
-	}
-	for i := 0; i < len(proxy_list); i++ {
-		fmt.Println(<-c)
+		var result = <-result_channel
+		if result != "error" {
+			fmt.Println(result)
+			break
+		}
 	}
 
 }
