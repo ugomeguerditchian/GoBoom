@@ -39,7 +39,7 @@ func handler_proxy(domain string, proxy string) string {
 	//format of domain is domain.com
 	proxyUrl, err := url.Parse("http://" + proxy)
 	if err != nil {
-		log.Fatal(err)
+		return "error"
 	}
 	//create a new http client
 	client := &http.Client{
@@ -52,7 +52,8 @@ func handler_proxy(domain string, proxy string) string {
 		return "error"
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 200 {
+	//if resp.StatusCode exist
+	if resp.StatusCode != 0 {
 		return resp.Status
 	} else {
 		return "error"
