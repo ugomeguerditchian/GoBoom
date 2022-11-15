@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 func proxy_getter() []string {
@@ -52,6 +53,13 @@ func handler_proxy(domain string, proxy string) string {
 		return "error"
 	}
 	defer resp.Body.Close()
+	//if resp is 503 too many connection
+	if resp.Status == "503 too many connection" {
+		return "error"
+	}
+	if resp.Status == "409 Conflict" {
+		return "error"
+	}
 	//if resp.StatusCode exist
 	if resp.StatusCode != 0 {
 		return resp.Status
@@ -106,19 +114,32 @@ func main() {
 	//create a channel to store the result
 	var result_channel = make(chan string)
 	//create a thread for each chunk
+	quit := make(chan bool)
 	for true {
 		for i := 0; i < thread; i++ {
 			//fmt.Print("Thread ", i, " is running")
 			go func(i int) {
-				result_channel <- handler_proxy_thread(domain, chunk_list[i])
+				for {
+					select {
+					case <-quit:
+						return
+					default:
+						result_channel <- handler_proxy_thread(domain, chunk_list[i])
+					}
+				}
 			}(i)
 		}
 		//get the result from the channel
 		for i := 0; i < thread; i++ {
 			var result = <-result_channel
 			if result != "error" {
-				//fmt.Println(result)
+				fmt.Println(result)
+				//wait 0.5 second
+				time.Sleep(200 * time.Millisecond)
 				break
+			} else {
+				fmt.Println(result)
+				quit <- true
 			}
 		}
 	}
