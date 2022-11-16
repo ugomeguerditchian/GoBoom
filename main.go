@@ -33,6 +33,15 @@ func proxy_getter() []string {
 
 }
 
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
 func handler_proxy(domain string, proxy string) string {
 	//just connect to the website and check the status code
 	//use proxy to connect
@@ -54,25 +63,8 @@ func handler_proxy(domain string, proxy string) string {
 	}
 	defer resp.Body.Close()
 	//if resp is 503 too many connection
-	if resp.Status == "503 Too many open connections" {
-		return "error"
-	}
-	if resp.Status == "401 Unauthorized" {
-		return "error"
-	}
-	if resp.Status == "409 Conflict" {
-		return "error"
-	}
-	if resp.Status == "404 Not Found" {
-		return "error"
-	}
-	if resp.Status == "502 Bad Gateway" {
-		return "error"
-	}
-	if resp.Status == "504 Gateway Timeout" {
-		return "error"
-	}
-	if resp.Status == "407 Proxy Authentication Required" {
+	var status_code_to_escape = []string{"503 Too many open connections", "401 Unauthorized", "409 Conflict", "404 Not Found", "502 Bad Gateway", "504 Gateway Timeout", "407 Proxy Authentication Required", "400 Bad Request", "502 Proxy Error"}
+	if stringInSlice(resp.Status, status_code_to_escape) {
 		return "error"
 	}
 	//if resp.StatusCode exist
