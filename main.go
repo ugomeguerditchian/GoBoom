@@ -54,10 +54,25 @@ func handler_proxy(domain string, proxy string) string {
 	}
 	defer resp.Body.Close()
 	//if resp is 503 too many connection
-	if resp.Status == "503 too many connection" {
+	if resp.Status == "503 Too many open connections" {
+		return "error"
+	}
+	if resp.Status == "401 Unauthorized" {
 		return "error"
 	}
 	if resp.Status == "409 Conflict" {
+		return "error"
+	}
+	if resp.Status == "404 Not Found" {
+		return "error"
+	}
+	if resp.Status == "502 Bad Gateway" {
+		return "error"
+	}
+	if resp.Status == "504 Gateway Timeout" {
+		return "error"
+	}
+	if resp.Status == "407 Proxy Authentication Required" {
 		return "error"
 	}
 	//if resp.StatusCode exist
