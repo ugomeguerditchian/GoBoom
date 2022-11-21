@@ -24,6 +24,7 @@ var statusCodeToEscape = []string{
 	"403 Forbidden",
 	"503 Service Unavailable",
 	"504 DNS Name Not Found",
+	"407 Unauthorized",
 }
 
 func getProxyList() []string {
@@ -122,10 +123,10 @@ func main() {
 	for {
 		var wg sync.WaitGroup
 		for _, chunk := range chunked_proxy_list {
-			for _, proxy := range chunk {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+			wg.Add(1)
+			go func(chunk []string) {
+				defer wg.Done()
+				for _, proxy := range chunk {
 					for {
 						//time.Sleep(time.Millisecond * 100)
 						status := handlerProxy(domain, proxy)
@@ -139,8 +140,8 @@ func main() {
 					}
 					fmt.Println("Thread died")
 					return
-				}()
-			}
+				}
+			}(chunk)
 		}
 		wg.Wait()
 		fmt.Println("All threads are dead, restarting")
