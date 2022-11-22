@@ -315,9 +315,15 @@ func main() {
 			}
 		}
 		proxy_list := test_proxy(*proxy_file)
+		fmt.Println("Good proxy : ", len(proxy_list))
+		for i := 0; i < 5; i++ {
+			proxy_list = append(proxy_list, proxy_list...)
+		}
 
 		//get the list of proxy
 		fmt.Println("Total proxy :", len(proxy_list))
+		fmt.Println("Starting attack in 5 seconds...")
+		time.Sleep(5 * time.Second)
 		threads_int := 10
 
 		if *threads != "max" {
