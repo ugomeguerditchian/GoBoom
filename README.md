@@ -1,7 +1,7 @@
 
 # GoBoom
 
-A simple tool to "DDoS" a webserver via multiple threads and eachs using differents proxy
+A simple tool to "DDoS" a webserver via multiple threads each using a different proxy
 
 
 
@@ -19,6 +19,7 @@ go run GoBoom.go -h
 
 usage: GoBoom [-h|--help] -d|--domain "<value>" [-t|--threads "<value>"]
               [-p|--proxy-file "<value>" [-p|--proxy-file "<value>" ...]]
+              [-m|--mode <integer>]
 
               Boom some website by proxy
 
@@ -29,6 +30,8 @@ Arguments:
   -t  --threads     Number of threads. Default: max
   -p  --proxy-file  Proxy file(s), separate with a ',' each files. Format of
                     file(s) must be ip:port. Default: []
+  -m  --mode        Mode of attack, 1 for pass all traffic trough proxy, 2
+                    don't use proxy. Default: 1
 ```
 ### With Golang
 ```shell
@@ -46,6 +49,13 @@ GoBoom.exe -d example.com
 You can add your own file containing proxy :
 ```shell
     go run GoBoom.go -d example.com -p C:\myfile1.txt,C:\myfile2.txt
+
+```
+
+### Use GoBoom without proxy
+You have to specify the number of threads you want to use
+```shell
+    go run GoBoom.go -d example.com -t 100 -m 2
 
 ```
 

