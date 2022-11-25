@@ -294,7 +294,7 @@ func main() {
 	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
 	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: "max"})
 	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
-	proxy_mult := parser.Int("x", "proxy-mult", &argparse.Options{Required: false, Help: "You can multiply the working proxys detected with this option", Default: "12"})
+	proxy_mult := parser.Int("x", "proxy-mult", &argparse.Options{Required: false, Help: "You can multiply the working proxys detected with this option", Default: 12})
 	mode := parser.Int("m", "mode", &argparse.Options{Required: false, Help: "Mode of attack, 1 for pass all traffic trough proxy, 2 don't use proxy", Default: 1})
 	err := parser.Parse(os.Args)
 	if err != nil {
