@@ -1,18 +1,18 @@
+<div id="header" align="center">
+<h1>💥GoBoom💥</h1>
+  <p><b>A simple tool to "DDoS" a webserver via multiple threads each using a different proxy</b></p>
+</div>
 
-# GoBoom
-
-A simple tool to "DDoS" a webserver via multiple threads each using a different proxy
 
 
-
-## Features
+## Features 📁
 
 - Auto harvest of multiple sources for free proxy
 - Possibility to add file with your own proxy (ip:port format)
 - Possibility to set your own threads limit
 
 
-## Usage/Examples
+## Usage/Examples 📖
 ### Help
 ```shell
 go run GoBoom.go -h
@@ -63,11 +63,11 @@ You have to specify the number of threads you want to use
 
 
 
-## Authors
+## Authors 🖋
 
 - [@ugomeguerditchian](https://github.com/ugomeguerditchian)
 
-## Contributors
+## Contributors 🖊
 
 - [@lisandro-git](https://github.com/lisandro-git)
 
