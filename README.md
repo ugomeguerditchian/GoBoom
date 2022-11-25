@@ -19,7 +19,7 @@ go run GoBoom.go -h
 
 usage: GoBoom [-h|--help] -d|--domain "<value>" [-t|--threads "<value>"]
               [-p|--proxy-file "<value>" [-p|--proxy-file "<value>" ...]]
-              [-m|--mode <integer>]
+              [-x|--proxy-mult <integer>] [-m|--mode <integer>]
 
               Boom some website by proxy
 
@@ -30,6 +30,8 @@ Arguments:
   -t  --threads     Number of threads. Default: max
   -p  --proxy-file  Proxy file(s), separate with a ',' each files. Format of
                     file(s) must be ip:port. Default: []
+  -x  --proxy-mult  You can multiply the working proxys detected with this
+                    option. Default: 12
   -m  --mode        Mode of attack, 1 for pass all traffic trough proxy, 2
                     don't use proxy. Default: 1
 ```
