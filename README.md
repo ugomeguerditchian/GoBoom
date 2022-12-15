@@ -10,6 +10,7 @@
 - Auto harvest of multiple sources for free proxy
 - Possibility to add file with your own proxy (ip:port format)
 - Possibility to set your own threads limit
+- Possibility to use without proxy
 
 
 ## Usage/Examples 📖
@@ -27,7 +28,7 @@ Arguments:
 
   -h  --help        Print help information
   -d  --domain      Domain to boom
-  -t  --threads     Number of threads. Default: max
+  -t  --threads     Number of core to use. Default: max
   -p  --proxy-file  Proxy file(s), separate with a ',' each files. Format of
                     file(s) must be ip:port. Default: []
   -x  --proxy-mult  You can multiply the working proxys detected with this
@@ -60,7 +61,7 @@ You have to specify the number of threads you want to use
     go run GoBoom.go -d example.com -t 100 -m 2
 
 ```
-
+In this case GoBoom will use all core of your CPU, you have to adapt it with the number of threads you want to use
 
 
 ## Authors 🖋

