@@ -242,8 +242,8 @@ func check_host_up(domain string) bool {
 func test_proxy(proxy_file []string) []string {
 	var good_proxy []string
 	//get the list of proxy
-	proxy_list := getProxyList_genode()
-	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt")...)
+	//proxy_list := getProxyList_genode()
+	proxy_list := getProxyList_github("https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt")
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt")...)
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")...)
 	proxy_list = append(proxy_list, getProxyList_github("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt")...)
