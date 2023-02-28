@@ -2,4 +2,8 @@ module goBoom
 
 go 1.19
 
-require github.com/akamensky/argparse v1.4.0 // indirect
+require (
+	github.com/akamensky/argparse v1.4.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+)

